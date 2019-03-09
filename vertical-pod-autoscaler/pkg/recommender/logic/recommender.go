@@ -18,14 +18,30 @@ package logic
 
 import (
 	"flag"
+	"math"
 
+	"github.com/golang/glog"
+	
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/recommender/model"
+)
+
+const (
+	P_NOM = 0.8
+	SLA = 1.0 // set point of the system
+	A = 0.5 // value from 0 to 1 to change how the control is conservative
+	A1_NOM = 0.1963
+	A2_NOM = 0.002
+	A3_NOM = 0.5658
+	// CORE_MIN = 1.0
+	CORE_MAX = 1.0
 )
 
 var (
 	safetyMarginFraction = flag.Float64("recommendation-margin-fraction", 0.15, `Fraction of usage added as the safety margin to the recommended request`)
 	podMinCPUMillicores  = flag.Float64("pod-recommendation-min-cpu-millicores", 25, `Minimum CPU recommendation for a pod`)
 	podMinMemoryMb       = flag.Float64("pod-recommendation-min-memory-mb", 250, `Minimum memory recommendation for a pod`)
+
+	uiOld = 0.0
 )
 
 // PodResourceRecommender computes resource recommendation for a Vpa object.
@@ -73,16 +89,46 @@ func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggre
 
 	for containerName, aggregatedContainerState := range containerNameToAggregateStateMap {
 		recommendation[containerName] = recommender.estimateContainerResources(aggregatedContainerState)
+		glog.Info("=== DEBUGGING === ", recommendation[containerName])
 	}
 	return recommendation
 }
 
 // Takes AggregateContainerState and returns a container recommendation.
 func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateContainerState) RecommendedContainerResources {
+	// TODO: test variables, shall be replaced by real-time values
+	requests := 80.7
+	respTime := 5.2
+
+	req := float64(requests) // active requests + queue of requests
+	rt := respTime // mean of the response times
+	err := SLA/1000 - rt/1000
+	ke := (A-1)/(P_NOM-1)*err
+	ui := uiOld+(1-P_NOM)*ke
+	ut := ui+ke
+
+	targetCore := req*(ut-A1_NOM-1000.0*A2_NOM)/(1000.0*A3_NOM*(A1_NOM-ut))
+
+	approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), CORE_MAX)
+	
+	approxUt := ((1000.0*A2_NOM+A1_NOM)*req+1000.0*A1_NOM*A3_NOM*approxCore)/(req+1000.0*A3_NOM*approxCore)
+	uiOld = approxUt-ke
+	
+	// TODO: Find the default value of the memory of the deployment file
+	// TODO: handle CORE_MAX correctly
 	return RecommendedContainerResources{
-		r.targetEstimator.GetResourceEstimation(s),
-		r.lowerBoundEstimator.GetResourceEstimation(s),
-		r.upperBoundEstimator.GetResourceEstimation(s),
+		Target: model.Resources{
+			model.ResourceCPU: model.CPUAmountFromCores(targetCore),
+			model.ResourceMemory: r.targetEstimator.GetResourceEstimation(s)["memory"],
+		},
+		LowerBound: model.Resources{
+			model.ResourceCPU: model.CPUAmountFromCores(*podMinCPUMillicores/1000.0),
+			model.ResourceMemory: r.lowerBoundEstimator.GetResourceEstimation(s)["memory"],
+		},
+		UpperBound: model.Resources{
+			model.ResourceCPU: model.CPUAmountFromCores(CORE_MAX),
+			model.ResourceMemory: r.upperBoundEstimator.GetResourceEstimation(s)["memory"],
+		},
 	}
 }
 
