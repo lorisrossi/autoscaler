@@ -1,3 +1,13 @@
+
+The aim of this fork is to change the way the VPA recommender works, by using a PID controller based on response time and arrival time.
+
+The modifications are in `vertical-pod-autoscaler/pkg/recommender`
+
+Just use the `master` branch for pushing commits. It's not a good practice, but we don't need pull-requests overhead now
+
+
+------
+
 # Kubernetes Autoscaler
 
 [![Build Status](https://travis-ci.org/kubernetes/autoscaler.svg?branch=master)](https://travis-ci.org/kubernetes/autoscaler) [![GoDoc Widget]][GoDoc]
