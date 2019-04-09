@@ -31,6 +31,7 @@ import (
 	metrics_recommender "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/metrics/recommender"
 	vpa_utils "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/vpa"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 )
 
@@ -42,6 +43,10 @@ const (
 var (
 	checkpointsWriteTimeout = flag.Duration("checkpoints-timeout", time.Minute, `Timeout for writing checkpoints since the start of the recommender's main loop`)
 	minCheckpointsPerRun    = flag.Int("min-checkpoints", 10, "Minimum number of checkpoints to write per recommender's main loop")
+
+	customClient *kubernetes.Clientset
+	customConfig *rest.Config
+	customError error
 )
 
 // Recommender recommend resources for certain containers, based on utilization periodically got from metrics api.
@@ -96,7 +101,7 @@ func (r *recommender) UpdateVPAs() {
 		if !found {
 			continue
 		}
-		resources := r.podResourceRecommender.GetRecommendedPodResources(GetContainerNameToAggregateStateMap(vpa))
+		resources := r.podResourceRecommender.GetRecommendedPodResources(GetContainerNameToAggregateStateMap(vpa), customClient)
 		had := vpa.HasRecommendation()
 		vpa.Recommendation = getCappedRecommendation(vpa.ID, resources, observedVpa.Spec.ResourcePolicy)
 		// Set RecommendationProvided if recommendation not empty.
@@ -229,6 +234,18 @@ func (c RecommenderFactory) Make() Recommender {
 // Dependencies are created automatically.
 // Deprecated; use RecommenderFactory instead.
 func NewRecommender(config *rest.Config, checkpointsGCInterval time.Duration, useCheckpoints bool) Recommender {
+
+	// get config for custom client
+	customConfig, customError = rest.InClusterConfig()
+	if customError != nil {
+		panic(customError.Error())
+	}
+	// creates the clientset
+	customClient, customError = kubernetes.NewForConfig(customConfig)
+	if customError != nil {
+		panic(customError.Error())
+	}
+
 	clusterState := model.NewClusterState()
 	return RecommenderFactory{
 		ClusterState:           clusterState,

@@ -20,9 +20,15 @@ import (
 	"flag"
 	"math"
 
-	"github.com/golang/glog"
-	
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/recommender/model"
+	
+	// client-go
+	"time"
+	"encoding/json"
+	"strconv"
+	
+	"k8s.io/client-go/kubernetes"
+	// "k8s.io/klog"
 )
 
 const (
@@ -42,11 +48,31 @@ var (
 	podMinMemoryMb       = flag.Float64("pod-recommendation-min-memory-mb", 250, `Minimum memory recommendation for a pod`)
 
 	uiOld = 0.0
+	old_count = 0 // store the previous value of the requests counter
 )
+
+type MetricValueList struct {
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
+	Metadata   struct {
+		SelfLink string `json:"selfLink"`
+	} `json:"metadata"`
+	Items []struct {
+		DescribedObject struct {
+			Kind          string    `json:"kind"`
+			Namespace     string    `json:"namespace"`
+			Name          string    `json:"name"`
+			ApiVersion 		string 		`json:"apiVersion"`
+		} `json:"describedObject"`
+		MetricName  string    `json:"metricName"`
+		Timestamp	  time.Time `json:"timestamp"`				
+		Value 			string    `json:"value"`
+	} `json:"items"`
+}
 
 // PodResourceRecommender computes resource recommendation for a Vpa object.
 type PodResourceRecommender interface {
-	GetRecommendedPodResources(containerNameToAggregateStateMap model.ContainerNameToAggregateStateMap) RecommendedPodResources
+	GetRecommendedPodResources(containerNameToAggregateStateMap model.ContainerNameToAggregateStateMap, customClient *kubernetes.Clientset) RecommendedPodResources
 }
 
 // RecommendedPodResources is a Map from container name to recommended resources.
@@ -69,7 +95,7 @@ type podResourceRecommender struct {
 	upperBoundEstimator ResourceEstimator
 }
 
-func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggregateStateMap model.ContainerNameToAggregateStateMap) RecommendedPodResources {
+func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggregateStateMap model.ContainerNameToAggregateStateMap, customClient *kubernetes.Clientset) RecommendedPodResources {
 	var recommendation = make(RecommendedPodResources)
 	if len(containerNameToAggregateStateMap) == 0 {
 		return recommendation
@@ -88,48 +114,80 @@ func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggre
 	}
 
 	for containerName, aggregatedContainerState := range containerNameToAggregateStateMap {
-		recommendation[containerName] = recommender.estimateContainerResources(aggregatedContainerState)
-		glog.Info("=== DEBUGGING === ", recommendation[containerName])
+		recommendation[containerName] = recommender.estimateContainerResources(aggregatedContainerState, customClient, containerName)
 	}
 	return recommendation
 }
 
 // Takes AggregateContainerState and returns a container recommendation.
-func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateContainerState) RecommendedContainerResources {
-	// TODO: test variables, shall be replaced by real-time values
-	requests := 80.7
-	respTime := 5.2
+func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateContainerState,
+	customClient *kubernetes.Clientset, containerName string) RecommendedContainerResources {
 
-	req := float64(requests) // active requests + queue of requests
-	rt := respTime // mean of the response times
-	err := SLA/1000 - rt/1000
-	ke := (A-1)/(P_NOM-1)*err
-	ui := uiOld+(1-P_NOM)*ke
-	ut := ui+ke
+	if (containerName == "our-fantastic-app") {
+		// custom metrics
+		var metrics MetricValueList
+		metricName := "nginx_http_requests_per_second"
+		err := getMetrics(customClient, &metrics, metricName)
+		if err != nil {
+			panic(err.Error())
+		}
+		// TODO: directly fetch the value from the metrics.Items object
+		// Try if this works:
+		// value := parseValue(metrics.Items[0].value)
 
-	targetCore := req*(ut-A1_NOM-1000.0*A2_NOM)/(1000.0*A3_NOM*(A1_NOM-ut))
+		// for _, m := range metrics.Items {
+		// 	fmt.Println("Pod:", m.DescribedObject.Name,"\tNamespace:", m.DescribedObject.Namespace,
+		// 	"\nMetric Name:", m.MetricName,"\tValue:", value,"\nTimestamp:", m.Timestamp.String())
+		// }
+		
+		// metricName = "nginx_connections_accepted"
+		// err = getMetrics(customClient, &metrics, metricName)
+		// if err != nil {
+		// 	klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
+		// }
+		// for _, m := range metrics.Items {
+		// 	value := parseValue(m.Value)
+		// 	fmt.Println("Pod:", m.DescribedObject.Name,"\tNamespace:", m.DescribedObject.Namespace,
+		// 	"\nMetric Name:", m.MetricName,"\tValue:", value,"\nTimestamp:", m.Timestamp.String())
+		// }
 
-	approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), CORE_MAX)
+		// TODO: test variables, shall be replaced by real-time values
+		requests := 80 - old_count
+		old_count = 80 // new count
+		respTime := 5.2
 	
-	approxUt := ((1000.0*A2_NOM+A1_NOM)*req+1000.0*A1_NOM*A3_NOM*approxCore)/(req+1000.0*A3_NOM*approxCore)
-	uiOld = approxUt-ke
+		req := float64(requests) // active requests + queue of requests
+		rt := respTime // mean of the response times
+		error := SLA/1000 - rt/1000
+		ke := (A-1)/(P_NOM-1)*error
+		ui := uiOld+(1-P_NOM)*ke
+		ut := ui+ke
 	
-	// TODO: Find the default value of the memory of the deployment file
-	// TODO: handle CORE_MAX correctly
-	return RecommendedContainerResources{
-		Target: model.Resources{
-			model.ResourceCPU: model.CPUAmountFromCores(targetCore),
-			model.ResourceMemory: r.targetEstimator.GetResourceEstimation(s)["memory"],
-		},
-		LowerBound: model.Resources{
-			model.ResourceCPU: model.CPUAmountFromCores(*podMinCPUMillicores/1000.0),
-			model.ResourceMemory: r.lowerBoundEstimator.GetResourceEstimation(s)["memory"],
-		},
-		UpperBound: model.Resources{
-			model.ResourceCPU: model.CPUAmountFromCores(CORE_MAX),
-			model.ResourceMemory: r.upperBoundEstimator.GetResourceEstimation(s)["memory"],
-		},
+		targetCore := req*(ut-A1_NOM-1000.0*A2_NOM)/(1000.0*A3_NOM*(A1_NOM-ut))
+	
+		approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), CORE_MAX)
+		
+		approxUt := ((1000.0*A2_NOM+A1_NOM)*req+1000.0*A1_NOM*A3_NOM*approxCore)/(req+1000.0*A3_NOM*approxCore)
+		uiOld = approxUt-ke
+		
+		// TODO: Find the default value of the memory of the deployment file
+		// TODO: handle CORE_MAX correctly
+		return RecommendedContainerResources{
+			Target: model.Resources{
+				model.ResourceCPU: model.CPUAmountFromCores(targetCore),
+				model.ResourceMemory: r.targetEstimator.GetResourceEstimation(s)["memory"],
+			},
+			LowerBound: r.lowerBoundEstimator.GetResourceEstimation(s),
+			UpperBound: r.upperBoundEstimator.GetResourceEstimation(s),
+		}
+	} else {
+		return RecommendedContainerResources{
+			r.targetEstimator.GetResourceEstimation(s),
+			r.lowerBoundEstimator.GetResourceEstimation(s),
+			r.upperBoundEstimator.GetResourceEstimation(s),
+		}
 	}
+	
 }
 
 // CreatePodResourceRecommender returns the primary recommender.
@@ -181,4 +239,28 @@ func CreatePodResourceRecommender() PodResourceRecommender {
 		targetEstimator,
 		lowerBoundEstimator,
 		upperBoundEstimator}
+}
+
+
+func getMetrics(clientset *kubernetes.Clientset, metrics *MetricValueList, metricName string) error {
+	data, err := clientset.RESTClient().Get().AbsPath("apis/custom.metrics.k8s.io/v1beta1/namespaces/nginx-ingress/pods/*/"+metricName).DoRaw()
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &metrics)
+	return err
+}
+
+func parseValue(value string) (float64) {
+	multiplier := 1.0
+	if value[len(value)-1] == 'm' {
+		multiplier = 0.001
+		value = value[:len(value)-1]
+	}
+
+	fValue, err := strconv.ParseFloat(value, 32)
+	if err != nil {
+		return 0
+	}
+	return fValue * multiplier
 }
