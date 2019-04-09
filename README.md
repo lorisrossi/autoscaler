@@ -5,6 +5,7 @@ The modifications are in `vertical-pod-autoscaler/pkg/recommender`
 
 Just use the `master` branch for pushing commits. It's not a good practice, but we don't need pull-requests overhead now
 
+You can find the main repository of the project here: [keni7385/k8s-infrastructure](https://github.com/keni7385/k8s-infrastructure)
 
 ------
 
