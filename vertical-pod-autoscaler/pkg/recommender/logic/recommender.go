@@ -19,6 +19,7 @@ package logic
 import (
 	"flag"
 	"math"
+	"fmt"
 
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/recommender/model"
 	
@@ -28,7 +29,7 @@ import (
 	"strconv"
 	
 	"k8s.io/client-go/kubernetes"
-	// "k8s.io/klog"
+	"k8s.io/klog"
 )
 
 const (
@@ -48,7 +49,7 @@ var (
 	podMinMemoryMb       = flag.Float64("pod-recommendation-min-memory-mb", 250, `Minimum memory recommendation for a pod`)
 
 	uiOld = 0.0
-	old_count = 0 // store the previous value of the requests counter
+	old_count = 0.0 // store the previous value of the requests counter
 )
 
 type MetricValueList struct {
@@ -123,38 +124,29 @@ func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggre
 func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateContainerState,
 	customClient *kubernetes.Clientset, containerName string) RecommendedContainerResources {
 
-	if (containerName == "our-fantastic-app") {
+	fmt.Println("Container Name:", containerName)	
+	if (containerName == "azure-vote-front") {
 		// custom metrics
 		var metrics MetricValueList
-		metricName := "nginx_http_requests_per_second"
+		metricName := "response_time"
 		err := getMetrics(customClient, &metrics, metricName)
 		if err != nil {
-			panic(err.Error())
+			klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
 		}
-		// TODO: directly fetch the value from the metrics.Items object
-		// Try if this works:
-		// value := parseValue(metrics.Items[0].value)
-
-		// for _, m := range metrics.Items {
-		// 	fmt.Println("Pod:", m.DescribedObject.Name,"\tNamespace:", m.DescribedObject.Namespace,
-		// 	"\nMetric Name:", m.MetricName,"\tValue:", value,"\nTimestamp:", m.Timestamp.String())
-		// }
+		response_time := parseValue(metrics.Items[0].Value)
+		fmt.Println("Response time:", response_time)
 		
-		// metricName = "nginx_connections_accepted"
-		// err = getMetrics(customClient, &metrics, metricName)
-		// if err != nil {
-		// 	klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
-		// }
-		// for _, m := range metrics.Items {
-		// 	value := parseValue(m.Value)
-		// 	fmt.Println("Pod:", m.DescribedObject.Name,"\tNamespace:", m.DescribedObject.Namespace,
-		// 	"\nMetric Name:", m.MetricName,"\tValue:", value,"\nTimestamp:", m.Timestamp.String())
-		// }
+		metricName = "response_count"
+		err = getMetrics(customClient, &metrics, metricName)
+		if err != nil {
+			klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
+		}
+		response_count := parseValue(metrics.Items[0].Value)
+		fmt.Println("Response count:", response_count)
 
-		// TODO: test variables, shall be replaced by real-time values
-		requests := 80 - old_count
-		old_count = 80 // new count
-		respTime := 5.2
+		requests := response_count - old_count
+		old_count = response_count // new count
+		respTime := response_time
 	
 		req := float64(requests) // active requests + queue of requests
 		rt := respTime // mean of the response times
@@ -258,9 +250,9 @@ func parseValue(value string) (float64) {
 		value = value[:len(value)-1]
 	}
 
-	fValue, err := strconv.ParseFloat(value, 32)
+	fValue, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		return 0
+		return 0.0
 	}
 	return fValue * multiplier
 }
