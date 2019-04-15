@@ -125,7 +125,7 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 	customClient *kubernetes.Clientset, containerName string) RecommendedContainerResources {
 
 	fmt.Println("Container Name:", containerName)	
-	if (containerName == "azure-vote-front") {
+	if (containerName == "pwitter-front" || containerName == "azure-vote-front") {
 		// custom metrics
 		var metrics MetricValueList
 		metricName := "response_time"
