@@ -161,6 +161,19 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 		
 		approxUt := ((1000.0*A2_NOM+A1_NOM)*req+1000.0*A1_NOM*A3_NOM*approxCore)/(req+1000.0*A3_NOM*approxCore)
 		uiOld = approxUt-ke
+
+		fmt.Println(
+			"== Controller debug ==",
+			"\nRequests:", req,
+			"\nResponse time:", rt,
+			" s\nerror:", error,
+			"\nke:", ke,
+			"\nui:", ui,
+			"\nut:", ut,
+			"\ntargetCore:", targetCore,
+			"\napproxCore:", approxCore,
+			"\napproxUt:", approxUt,
+			"\nuiOld:", uiOld)
 		
 		// TODO: Find the default value of the memory of the deployment file
 		// TODO: handle CORE_MAX correctly
@@ -251,7 +264,7 @@ func parseValue(value string) (float64) {
 	}
 
 	fValue, err := strconv.ParseFloat(value, 64)
-	if err != nil {
+	if err != nil || fValue < 0 {
 		return 0.0
 	}
 	return fValue * multiplier
