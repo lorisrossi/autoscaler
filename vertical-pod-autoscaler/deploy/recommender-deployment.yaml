@@ -27,7 +27,8 @@ spec:
         - --v=4
         - --stderrthreshold=info
         - --recommender-interval=25s
-        - --control-core-max=0.5
+        - --control-core-max=2
+        - --control-replicas=2
         imagePullPolicy: Always
         resources:
           limits:

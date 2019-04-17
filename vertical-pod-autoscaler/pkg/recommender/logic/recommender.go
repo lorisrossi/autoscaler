@@ -40,13 +40,14 @@ var (
 	uiOld = 0.0
 	old_count = 0.0 // store the previous value of the requests counter
 
-	control_pNom    = flag.Float64("control-p-nom", 0.8, ``)
-	control_sla     = flag.Float64("control-sla", 1.0, `Service level agreement to guarantee`) // set point of the system
-	control_a       = flag.Float64("control-a", 0.5, `Value from 0 to 1 to change how the control is conservative`)
-	control_a1Nom   = flag.Float64("control-a1-nom", 0.1963, ``)
-	control_a2Nom   = flag.Float64("control-a2-nom", 0.002, ``)
-	control_a3Nom   = flag.Float64("control-a3-nom", 0.5658, ``)
-	control_coreMax = flag.Float64("control-core-max", 1.0, `The maximum amount of cores to afford for the scaling`)
+	control_replicasNum = flag.Float64("control-replicas", 2, `Number of replicasets of pod to be scaled`)
+	control_pNom    		= flag.Float64("control-p-nom", 0.8, ``)
+	control_sla     		= flag.Float64("control-sla", 1.0, `Service level agreement to guarantee`) // set point of the system
+	control_a       		= flag.Float64("control-a", 0.5, `Value from 0 to 1 to change how the control is conservative`)
+	control_a1Nom   		= flag.Float64("control-a1-nom", 0.1963, ``)
+	control_a2Nom   		= flag.Float64("control-a2-nom", 0.002, ``)
+	control_a3Nom   		= flag.Float64("control-a3-nom", 0.5658, ``)
+	control_coreMax 		= flag.Float64("control-core-max", 1.0, `The maximum amount of cores to afford for the scaling`)
 )
 
 type MetricValueList struct {
@@ -145,9 +146,9 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 		old_count = response_count // new count
 		respTime := response_time
 	
-		req := float64(requests) // active requests + queue of requests
+		req := float64(requests / (*control_replicasNum)) // active requests + queue of requests
 		rt := respTime // mean of the response times
-		error := (*control_sla)/1000 - rt/1000
+		error := (*control_sla) - rt
 		ke := ((*control_a)-1)/((*control_pNom)-1)*error
 		ui := uiOld+(1-(*control_pNom))*ke
 		ut := ui+ke
