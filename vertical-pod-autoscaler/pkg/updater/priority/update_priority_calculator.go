@@ -33,7 +33,7 @@ const (
 	defaultUpdateThreshold = 0.10
 	// Pods that live for at least that long can be evicted even if their
 	// request is within the [MinRecommended...MaxRecommended] range.
-	podLifetimeUpdateThreshold = time.Hour * 12
+	podLifetimeUpdateThreshold = time.Minute * 1
 )
 
 var (

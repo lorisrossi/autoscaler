@@ -1,7 +1,7 @@
 all: build
 
-TAG?=dev
-REGISTRY?=staging-k8s.gcr.io
+TAG?=0.4.0
+REGISTRY?=lorisrossi
 FLAGS=
 ENVVAR=
 GOOS?=linux
