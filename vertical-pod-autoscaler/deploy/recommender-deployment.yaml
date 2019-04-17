@@ -21,6 +21,11 @@ spec:
       containers:
       - name: recommender
         image: docker.io/lorisrossi/vpa-recommender:0.4.0
+        command:
+        - /recommender
+        - --v=4
+        - --stderrthreshold=info
+        - --recommender-interval=30s
         imagePullPolicy: Always
         resources:
           limits:

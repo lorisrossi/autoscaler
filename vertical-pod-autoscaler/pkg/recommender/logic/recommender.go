@@ -32,17 +32,6 @@ import (
 	"k8s.io/klog"
 )
 
-const (
-	P_NOM = 0.8
-	SLA = 1.0 // set point of the system
-	A = 0.5 // value from 0 to 1 to change how the control is conservative
-	A1_NOM = 0.1963
-	A2_NOM = 0.002
-	A3_NOM = 0.5658
-	// CORE_MIN = 1.0
-	CORE_MAX = 1.0
-)
-
 var (
 	safetyMarginFraction = flag.Float64("recommendation-margin-fraction", 0.15, `Fraction of usage added as the safety margin to the recommended request`)
 	podMinCPUMillicores  = flag.Float64("pod-recommendation-min-cpu-millicores", 25, `Minimum CPU recommendation for a pod`)
@@ -50,6 +39,15 @@ var (
 
 	uiOld = 0.0
 	old_count = 0.0 // store the previous value of the requests counter
+
+	control_pNom    = flag.Float64("control-p-nom", 0.8, ``)
+	control_sla     = flag.Float64("control-sla", 1.0, `Service level agreement to guarantee`) // set point of the system
+	control_a       = flag.Float64("control-a", 0.5, ``) // value from 0 to 1 to change how the control is conservative
+	control_a1Nom   = flag.Float64("control-a1-nom", 0.1963, ``)
+	control_a2Nom   = flag.Float64("control-a2-nom", 0.002, ``)
+	control_a3Nom   = flag.Float64("control-a3-nom", 0.5658, ``)
+	// 	control_coreMin = flag.Float64("control-core-min", 1.0, ``)
+	control_coreMax = flag.Float64("control-core-max", 1.0, `The maximum amount of cores to afford for the scaling`)
 )
 
 type MetricValueList struct {
@@ -150,16 +148,16 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 	
 		req := float64(requests) // active requests + queue of requests
 		rt := respTime // mean of the response times
-		error := SLA/1000 - rt/1000
-		ke := (A-1)/(P_NOM-1)*error
-		ui := uiOld+(1-P_NOM)*ke
+		error := (*control_sla)/1000 - rt/1000
+		ke := ((*control_a)-1)/((*control_pNom)-1)*error
+		ui := uiOld+(1-(*control_pNom))*ke
 		ut := ui+ke
 	
-		targetCore := req*(ut-A1_NOM-1000.0*A2_NOM)/(1000.0*A3_NOM*(A1_NOM-ut))
+		targetCore := req*(ut-(*control_a1Nom)-1000.0*(*control_a2Nom))/(1000.0*(*control_a3Nom)*((*control_a1Nom)-ut))
 	
-		approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), CORE_MAX)
+		approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), *control_coreMax)
 		
-		approxUt := ((1000.0*A2_NOM+A1_NOM)*req+1000.0*A1_NOM*A3_NOM*approxCore)/(req+1000.0*A3_NOM*approxCore)
+		approxUt := ((1000.0*(*control_a2Nom)+(*control_a1Nom))*req+1000.0*(*control_a1Nom)*(*control_a3Nom)*approxCore)/(req+1000.0*(*control_a3Nom)*approxCore)
 		uiOld = approxUt-ke
 
 		fmt.Println(
