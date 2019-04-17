@@ -23,9 +23,11 @@ spec:
         image: docker.io/lorisrossi/vpa-recommender:0.4.0
         command:
         - /recommender
+        args:
         - --v=4
         - --stderrthreshold=info
-        - --recommender-interval=30s
+        - --recommender-interval=25s
+        - --control-core-max=0.5
         imagePullPolicy: Always
         resources:
           limits:

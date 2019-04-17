@@ -42,11 +42,10 @@ var (
 
 	control_pNom    = flag.Float64("control-p-nom", 0.8, ``)
 	control_sla     = flag.Float64("control-sla", 1.0, `Service level agreement to guarantee`) // set point of the system
-	control_a       = flag.Float64("control-a", 0.5, ``) // value from 0 to 1 to change how the control is conservative
+	control_a       = flag.Float64("control-a", 0.5, `Value from 0 to 1 to change how the control is conservative`)
 	control_a1Nom   = flag.Float64("control-a1-nom", 0.1963, ``)
 	control_a2Nom   = flag.Float64("control-a2-nom", 0.002, ``)
 	control_a3Nom   = flag.Float64("control-a3-nom", 0.5658, ``)
-	// 	control_coreMin = flag.Float64("control-core-min", 1.0, ``)
 	control_coreMax = flag.Float64("control-core-max", 1.0, `The maximum amount of cores to afford for the scaling`)
 )
 
@@ -173,11 +172,9 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 			"\napproxUt:", approxUt,
 			"\nuiOld:", uiOld)
 		
-		// TODO: Find the default value of the memory of the deployment file
-		// TODO: handle CORE_MAX correctly
 		return RecommendedContainerResources{
 			Target: model.Resources{
-				model.ResourceCPU: model.CPUAmountFromCores(targetCore),
+				model.ResourceCPU: model.CPUAmountFromCores(approxCore),
 				model.ResourceMemory: r.targetEstimator.GetResourceEstimation(s)["memory"],
 			},
 			LowerBound: r.lowerBoundEstimator.GetResourceEstimation(s),
