@@ -21,6 +21,13 @@ spec:
       containers:
       - name: updater
         image: docker.io/lorisrossi/vpa-updater:0.4.0
+        command:
+        - /updater
+        args:
+        - --v=4
+        - --stderrthreshold=info
+        - --updater-interval=25s
+        - --eviction-tolerance=1.0
         imagePullPolicy: Always
         resources:
           limits:
