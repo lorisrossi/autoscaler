@@ -31,17 +31,16 @@ import (
 const (
 	// Ignore change priority that is smaller than 10%.
 	defaultUpdateThreshold = 0.10
-	// Pods that live for at least that long can be evicted even if their
-	// request is within the [MinRecommended...MaxRecommended] range.
-	podLifetimeUpdateThreshold = time.Minute * 1
 )
 
 var (
 	evictAfterOOMThreshold = flag.Duration("evict-after-oom-treshold", 10*time.Minute,
 		`Evict pod that has only one container and it OOMed in less than
 		evict-after-oom-treshold since start.`)
+	podLifetimeUpdateThreshold = flag.Duration("lifetime-update-threshold", time.Second * 1,
+		`Pods that live for at least that long can be evicted even if their
+		request is within the [MinRecommended...MaxRecommended] range.`)
 )
-
 // UpdatePriorityCalculator is responsible for prioritizing updates on pods.
 // It can returns a sorted list of pods in order of update priority.
 // Update priority is proportional to fraction by which resources should be increased / decreased.
@@ -106,7 +105,7 @@ func (calc *UpdatePriorityCalculator) AddPod(pod *apiv1.Pod, recommendation *vpa
 			klog.V(2).Infof("not updating pod %v, missing field pod.Status.StartTime", pod.Name)
 			return
 		}
-		if now.Before(pod.Status.StartTime.Add(podLifetimeUpdateThreshold)) {
+		if now.Before(pod.Status.StartTime.Add(*podLifetimeUpdateThreshold)) {
 			klog.V(2).Infof("not updating a short-lived pod %v, request within recommended range", pod.Name)
 			return
 		}
