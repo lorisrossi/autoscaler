@@ -176,10 +176,16 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 		return RecommendedContainerResources{
 			Target: model.Resources{
 				model.ResourceCPU: model.CPUAmountFromCores(approxCore),
-				model.ResourceMemory: r.targetEstimator.GetResourceEstimation(s)["memory"],
+				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
 			},
-			LowerBound: r.lowerBoundEstimator.GetResourceEstimation(s),
-			UpperBound: r.upperBoundEstimator.GetResourceEstimation(s),
+			LowerBound: model.Resources{
+				model.ResourceCPU: model.CPUAmountFromCores(*podMinCPUMillicores/1000.0),
+				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
+			},
+			UpperBound: model.Resources{
+				model.ResourceCPU: model.CPUAmountFromCores(*control_coreMax),
+				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
+			},
 		}
 	} else {
 		return RecommendedContainerResources{
