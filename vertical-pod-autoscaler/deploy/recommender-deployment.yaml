@@ -24,11 +24,14 @@ spec:
         command:
         - /recommender
         args:
-        - --v=4
+        - --v=-1
         - --stderrthreshold=info
-        - --recommender-interval=25s
-        - --control-core-max=2
+        - --recommender-interval=30s
+        - --control-core-max=3
+        - --pod-recommendation-min-cpu-millicores=25
         - --control-replicas=2
+        - --control-a=0.5
+        - --control-memory=500
         imagePullPolicy: Always
         resources:
           limits:
