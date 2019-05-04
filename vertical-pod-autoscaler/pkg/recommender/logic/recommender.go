@@ -48,6 +48,7 @@ var (
 	control_a2Nom   		= flag.Float64("control-a2-nom", 0.002, ``)
 	control_a3Nom   		= flag.Float64("control-a3-nom", 0.5658, ``)
 	control_coreMax 		= flag.Float64("control-core-max", 1.0, `The maximum amount of cores to afford for the scaling`)
+	control_memory 			= flag.Float64("control-memory", 128, `Memory recommended by custom recommender`)
 )
 
 type MetricValueList struct {
@@ -122,7 +123,7 @@ func (r *podResourceRecommender) GetRecommendedPodResources(containerNameToAggre
 func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateContainerState,
 	customClient *kubernetes.Clientset, containerName string) RecommendedContainerResources {
 
-	fmt.Println("Container Name:", containerName)	
+	// fmt.Println("Container Name:", containerName)	
 	if (containerName == "pwitter-front" || containerName == "azure-vote-front") {
 		// custom metrics
 		var metrics MetricValueList
@@ -132,7 +133,7 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 			klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
 		}
 		response_time := parseValue(metrics.Items[0].Value)
-		fmt.Println("Response time:", response_time)
+		// fmt.Println("Response time:", response_time)
 		
 		metricName = "response_count"
 		err = getMetrics(customClient, &metrics, metricName)
@@ -140,7 +141,7 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 			klog.Errorf("Cannot get metric %s from Prometheus. Reason: %+v", metricName, err)
 		}
 		response_count := parseValue(metrics.Items[0].Value)
-		fmt.Println("Response count:", response_count)
+		// fmt.Println("Response count:", response_count)
 
 		requests := response_count - old_count
 		old_count = response_count // new count
@@ -160,31 +161,34 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 		approxUt := ((1000.0*(*control_a2Nom)+(*control_a1Nom))*req+1000.0*(*control_a1Nom)*(*control_a3Nom)*approxCore)/(req+1000.0*(*control_a3Nom)*approxCore)
 		uiOld = approxUt-ke
 
-		fmt.Println(
-			"== Controller debug ==",
-			"\nRequests:", req,
-			"\nResponse time:", rt,
-			" s\nerror:", error,
-			"\nke:", ke,
-			"\nui:", ui,
-			"\nut:", ut,
-			"\ntargetCore:", targetCore,
-			"\napproxCore:", approxCore,
-			"\napproxUt:", approxUt,
-			"\nuiOld:", uiOld)
+		// fmt.Println(
+		// 	"== Controller debug ==",
+		// 	"\nRequests:", req,
+		// 	"\nResponse time:", rt,
+		// 	" s\nerror:", error,
+		// 	"\nke:", ke,
+		// 	"\nui:", ui,
+		// 	"\nut:", ut,
+		// 	"\ntargetCore:", targetCore,
+		// 	"\napproxCore:", approxCore,
+		// 	"\napproxUt:", approxUt,
+		// 	"\nuiOld:", uiOld)
 		
+		fmt.Printf("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n",
+			req, rt, error, ke, ui, ut, targetCore, approxCore, approxUt, uiOld)
+
 		return RecommendedContainerResources{
 			Target: model.Resources{
 				model.ResourceCPU: model.CPUAmountFromCores(approxCore),
-				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
+				model.ResourceMemory: model.MemoryAmountFromBytes(*control_memory*1024*1024),
 			},
 			LowerBound: model.Resources{
 				model.ResourceCPU: model.CPUAmountFromCores(*podMinCPUMillicores/1000.0),
-				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
+				model.ResourceMemory: model.MemoryAmountFromBytes(*control_memory*1024*1024),
 			},
 			UpperBound: model.Resources{
 				model.ResourceCPU: model.CPUAmountFromCores(*control_coreMax),
-				model.ResourceMemory: model.MemoryAmountFromBytes(128 * 1024 * 1024),
+				model.ResourceMemory: model.MemoryAmountFromBytes(*control_memory*1024*1024),
 			},
 		}
 	} else {
