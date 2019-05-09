@@ -27,11 +27,12 @@ spec:
         - --v=-1
         - --stderrthreshold=info
         - --recommender-interval=30s
-        - --control-core-max=3
-        - --pod-recommendation-min-cpu-millicores=25
-        - --control-replicas=2
+        - --control-core-max=5
+        - --pod-recommendation-min-cpu-millicores=100
+        - --control-replicas=3
+        - --control_sla=0.6
         - --control-a=0.5
-        - --control-memory=500
+        - --control-memory=25000
         imagePullPolicy: Always
         resources:
           limits:
