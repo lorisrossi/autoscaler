@@ -156,7 +156,12 @@ func (r *podResourceRecommender) estimateContainerResources(s *model.AggregateCo
 	
 		targetCore := req*(ut-(*control_a1Nom)-1000.0*(*control_a2Nom))/(1000.0*(*control_a3Nom)*((*control_a1Nom)-ut))
 	
-		approxCore := math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), *control_coreMax)
+		approxCore := 0.0
+		if error < 0 {
+			approxCore = *control_coreMax
+		} else {
+			approxCore = math.Min(math.Max(math.Abs(targetCore), *podMinCPUMillicores/1000.0), *control_coreMax)
+		}
 		
 		approxUt := ((1000.0*(*control_a2Nom)+(*control_a1Nom))*req+1000.0*(*control_a1Nom)*(*control_a3Nom)*approxCore)/(req+1000.0*(*control_a3Nom)*approxCore)
 		uiOld = approxUt-ke
